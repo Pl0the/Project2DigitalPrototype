@@ -390,6 +390,7 @@ GameObject:
   m_Component:
   - component: {fileID: 254266683}
   - component: {fileID: 254266682}
+  - component: {fileID: 254266684}
   m_Layer: 0
   m_Name: Turn Flow
   m_TagString: Untagged
@@ -412,6 +413,7 @@ MonoBehaviour:
   playerOne: {fileID: 1526358655}
   playerTwo: {fileID: 8500428}
   viewCamera: {fileID: 960930134}
+  volleyController: {fileID: 254266684}
   firstPersonFieldOfView: 75
 --- !u!4 &254266683
 Transform:
@@ -428,6 +430,22 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &254266684
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 254266681}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: eb24bad0b15644c3998d8f7d5427146b, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::ArenaVolleyController
+  ballPrefab: {fileID: 6168650363065039559, guid: 2f8e5323ec76041b3b192851025da724, type: 3}
+  duration: 5
+  ballSpeed: 12
+  ballHeight: 1.2
 --- !u!1 &254525644
 GameObject:
   m_ObjectHideFlags: 0

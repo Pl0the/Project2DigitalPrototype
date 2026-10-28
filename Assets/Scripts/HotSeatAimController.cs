@@ -5,11 +5,12 @@ using UnityEngine.InputSystem;
 [DisallowMultipleComponent]
 public sealed class HotSeatAimController : MonoBehaviour
 {
-    public enum Phase { Overview, Handoff, Aiming, Locked }
+    public enum Phase { Overview, Handoff, Aiming, Resolving, Locked }
 
     [SerializeField] private ArenaPlayerMotor playerOne;
     [SerializeField] private ArenaPlayerMotor playerTwo;
     [SerializeField] private Camera viewCamera;
+    [SerializeField] private ArenaVolleyController volleyController;
     [SerializeField, Range(40f, 100f)] private float firstPersonFieldOfView = 75f;
 
     private Vector3 overviewPosition;
@@ -35,9 +36,9 @@ public sealed class HotSeatAimController : MonoBehaviour
 
     private void Awake()
     {
-        if (playerOne == null || playerTwo == null || viewCamera == null)
+        if (playerOne == null || playerTwo == null || viewCamera == null || volleyController == null)
         {
-            Debug.LogError("Assign both arena players and the view camera.", this);
+            Debug.LogError("Assign both arena players, the view camera, and the volley controller.", this);
             enabled = false;
             return;
         }
@@ -53,13 +54,23 @@ public sealed class HotSeatAimController : MonoBehaviour
         ShowOverview(Phase.Overview);
     }
 
+    private void OnEnable()
+    {
+        if (volleyController != null)
+            volleyController.Completed += CompleteVolley;
+    }
+
     private void Update()
     {
         Keyboard keyboard = Keyboard.current;
         if (keyboard == null)
             return;
 
-        if (CurrentPhase == Phase.Handoff && keyboard.spaceKey.wasPressedThisFrame)
+        if (CurrentPhase == Phase.Overview && keyboard.enterKey.wasPressedThisFrame)
+            BeginAimingPhase();
+        else if (CurrentPhase == Phase.Locked && keyboard.enterKey.wasPressedThisFrame)
+            BeginNextRound();
+        else if (CurrentPhase == Phase.Handoff && keyboard.spaceKey.wasPressedThisFrame)
             Ready();
         else if (CurrentPhase == Phase.Aiming)
         {
@@ -120,6 +131,15 @@ public sealed class HotSeatAimController : MonoBehaviour
         if (confirmedPlayers == 1)
             ShowHandoff(firstPlacementPlayer);
         else
+        {
+            ShowOverview(Phase.Resolving);
+            volleyController.BeginVolley(playerOne, playerTwo);
+        }
+    }
+
+    private void CompleteVolley()
+    {
+        if (CurrentPhase == Phase.Resolving)
             ShowOverview(Phase.Locked);
     }
 
@@ -134,6 +154,7 @@ public sealed class HotSeatAimController : MonoBehaviour
 
     public void Restart()
     {
+        volleyController.Cancel();
         StopBothPlayers();
         playerOne.ResetPose(playerOneStart, playerOneRotation);
         playerTwo.ResetPose(playerTwoStart, playerTwoRotation);
@@ -201,6 +222,11 @@ public sealed class HotSeatAimController : MonoBehaviour
 
     private void OnDisable()
     {
+        if (volleyController != null)
+        {
+            volleyController.Completed -= CompleteVolley;
+            volleyController.Cancel();
+        }
         if (playerOne != null)
         {
             playerOne.SetControlEnabled(false);
@@ -246,22 +272,29 @@ public sealed class HotSeatAimController : MonoBehaviour
             Fill(new Rect(width * 0.5f - 8f, height * 0.5f - 1f, 16f, 2f), Color.white);
             Fill(new Rect(width * 0.5f - 1f, height * 0.5f - 8f, 2f, 16f), Color.white);
         }
+        else if (CurrentPhase == Phase.Resolving)
+        {
+            Header(width, "ROUND " + RoundNumber + "  |  SHOTS IN FLIGHT", volleyController.TimeRemaining.ToString("0.0") + "s remaining  |  Movement and aim are locked");
+            Fill(new Rect(20f, height - 38f, width - 40f, 12f), new Color(0.12f, 0.15f, 0.2f));
+            float fraction = Mathf.Clamp01(volleyController.TimeRemaining / volleyController.Duration);
+            Fill(new Rect(20f, height - 38f, (width - 40f) * fraction, 12f), new Color(0.35f, 0.8f, 0.95f));
+        }
         else
         {
             bool locked = CurrentPhase == Phase.Locked;
-            string title = locked ? "BOTH PLAYERS READY" : "ROUND " + RoundNumber + "  |  OVERVIEW";
-            string detail = locked ? "Positions and aim directions are locked." : "P" + (firstPlacementPlayer + 1) + " places first  |  Aim order: P" + (2 - firstPlacementPlayer) + " then P" + (firstPlacementPlayer + 1);
+            string title = locked ? "ROUND COMPLETE" : "ROUND " + RoundNumber + "  |  OVERVIEW";
+            string detail = locked ? "Shots cleared. Both players are locked until the next round." : "P" + (firstPlacementPlayer + 1) + " places first  |  Aim order: P" + (2 - firstPlacementPlayer) + " then P" + (firstPlacementPlayer + 1);
             Header(width, title, detail);
             if (locked)
             {
-                if (GUI.Button(new Rect(width - 280f, height - 66f, 260f, 46f), "Next round", buttonStyle))
+                if (GUI.Button(new Rect(width - 280f, height - 66f, 260f, 46f), "Next round  [Enter]", buttonStyle))
                     BeginNextRound();
             }
             else
             {
                 if (GUI.Button(new Rect(20f, height - 66f, 300f, 46f), "First to place: P" + (firstPlacementPlayer + 1), buttonStyle))
                     SetFirstPlacementPlayer(1 - firstPlacementPlayer);
-                if (GUI.Button(new Rect(width - 280f, height - 66f, 260f, 46f), "Start aiming", buttonStyle))
+                if (GUI.Button(new Rect(width - 280f, height - 66f, 260f, 46f), "Start aiming  [Enter]", buttonStyle))
                     BeginAimingPhase();
             }
             if (locked && GUI.Button(new Rect(20f, height - 66f, 220f, 46f), "Restart", buttonStyle))
