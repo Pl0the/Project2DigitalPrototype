@@ -5,7 +5,8 @@ using UnityEngine.InputSystem;
 [DisallowMultipleComponent]
 public sealed class HotSeatAimController : MonoBehaviour
 {
-    public enum Phase { Overview, Handoff, Aiming, Resolving, Locked }
+    public enum Phase { Overview, Handoff, Aiming, Resolving, Locked, MatchOver }
+    public enum MatchResult { InProgress, PlayerOneWins, PlayerTwoWins, Draw }
 
     [SerializeField] private ArenaPlayerMotor playerOne;
     [SerializeField] private ArenaPlayerMotor playerTwo;
@@ -32,6 +33,9 @@ public sealed class HotSeatAimController : MonoBehaviour
     public int ActivePlayerIndex { get; private set; } = -1;
     public int RoundNumber { get; private set; } = 1;
     public bool IsPaused => paused;
+    public MatchResult Result { get; private set; }
+    public ArenaPlayerHealth PlayerOneHealth { get; private set; }
+    public ArenaPlayerHealth PlayerTwoHealth { get; private set; }
     private ArenaPlayerMotor ActivePlayer => ActivePlayerIndex == 0 ? playerOne : playerTwo;
 
     private void Awake()
@@ -39,6 +43,15 @@ public sealed class HotSeatAimController : MonoBehaviour
         if (playerOne == null || playerTwo == null || viewCamera == null || volleyController == null)
         {
             Debug.LogError("Assign both arena players, the view camera, and the volley controller.", this);
+            enabled = false;
+            return;
+        }
+
+        PlayerOneHealth = playerOne.GetComponent<ArenaPlayerHealth>();
+        PlayerTwoHealth = playerTwo.GetComponent<ArenaPlayerHealth>();
+        if (PlayerOneHealth == null || PlayerTwoHealth == null)
+        {
+            Debug.LogError("Add arena health to both players before starting the match.", this);
             enabled = false;
             return;
         }
@@ -70,6 +83,8 @@ public sealed class HotSeatAimController : MonoBehaviour
             BeginAimingPhase();
         else if (CurrentPhase == Phase.Locked && keyboard.enterKey.wasPressedThisFrame)
             BeginNextRound();
+        else if (CurrentPhase == Phase.MatchOver && keyboard.enterKey.wasPressedThisFrame)
+            Restart();
         else if (CurrentPhase == Phase.Handoff && keyboard.spaceKey.wasPressedThisFrame)
             Ready();
         else if (CurrentPhase == Phase.Aiming)
@@ -139,8 +154,18 @@ public sealed class HotSeatAimController : MonoBehaviour
 
     private void CompleteVolley()
     {
-        if (CurrentPhase == Phase.Resolving)
-            ShowOverview(Phase.Locked);
+        if (CurrentPhase != Phase.Resolving)
+            return;
+
+        // Resolve the entire simultaneous volley before deciding the winner.
+        // Both players can still be hit after the first knockout, allowing a draw.
+        bool oneDefeated = PlayerOneHealth.IsDefeated;
+        bool twoDefeated = PlayerTwoHealth.IsDefeated;
+        Result = oneDefeated && twoDefeated ? MatchResult.Draw
+            : oneDefeated ? MatchResult.PlayerTwoWins
+            : twoDefeated ? MatchResult.PlayerOneWins
+            : MatchResult.InProgress;
+        ShowOverview(Result == MatchResult.InProgress ? Phase.Locked : Phase.MatchOver);
     }
 
     public void BeginNextRound()
@@ -158,6 +183,9 @@ public sealed class HotSeatAimController : MonoBehaviour
         StopBothPlayers();
         playerOne.ResetPose(playerOneStart, playerOneRotation);
         playerTwo.ResetPose(playerTwoStart, playerTwoRotation);
+        PlayerOneHealth.ResetHealth();
+        PlayerTwoHealth.ResetHealth();
+        Result = MatchResult.InProgress;
         firstPlacementPlayer = 0;
         confirmedPlayers = 0;
         RoundNumber = 1;
@@ -242,6 +270,9 @@ public sealed class HotSeatAimController : MonoBehaviour
 
     private void OnGUI()
     {
+        if (PlayerOneHealth == null || PlayerTwoHealth == null)
+            return;
+
         EnsureStyles();
         if (CurrentPhase == Phase.Handoff || (CurrentPhase == Phase.Aiming && paused))
             Fill(new Rect(0f, 0f, Screen.width, Screen.height), new Color(0.015f, 0.02f, 0.03f, 1f));
@@ -279,11 +310,21 @@ public sealed class HotSeatAimController : MonoBehaviour
             float fraction = Mathf.Clamp01(volleyController.TimeRemaining / volleyController.Duration);
             Fill(new Rect(20f, height - 38f, (width - 40f) * fraction, 12f), new Color(0.35f, 0.8f, 0.95f));
         }
+        else if (CurrentPhase == Phase.MatchOver)
+        {
+            Header(width, "MATCH COMPLETE", "The full volley has finished. Both players are locked.");
+            Rect panel = CenterPanel(width, height);
+            string resultTitle = Result == MatchResult.Draw ? "DRAW" : Result == MatchResult.PlayerOneWins ? "PLAYER 1 WINS" : "PLAYER 2 WINS";
+            string resultDetail = Result == MatchResult.Draw ? "Both players were knocked out in the same volley." : "The other player has no health remaining.";
+            Panel(panel, resultTitle, resultDetail);
+            if (GUI.Button(new Rect(panel.x + 50f, panel.y + 182f, 420f, 48f), "New match  [Enter]", buttonStyle))
+                Restart();
+        }
         else
         {
             bool locked = CurrentPhase == Phase.Locked;
             string title = locked ? "ROUND COMPLETE" : "ROUND " + RoundNumber + "  |  OVERVIEW";
-            string detail = locked ? "Shots cleared. Both players are locked until the next round." : "P" + (firstPlacementPlayer + 1) + " places first  |  Aim order: P" + (2 - firstPlacementPlayer) + " then P" + (firstPlacementPlayer + 1);
+            string detail = locked ? "Shots cleared. Health carries over to the next round." : "P" + (firstPlacementPlayer + 1) + " places first  |  Aim order: P" + (2 - firstPlacementPlayer) + " then P" + (firstPlacementPlayer + 1);
             Header(width, title, detail);
             if (locked)
             {
@@ -300,7 +341,26 @@ public sealed class HotSeatAimController : MonoBehaviour
             if (locked && GUI.Button(new Rect(20f, height - 66f, 220f, 46f), "Restart", buttonStyle))
                 Restart();
         }
+
+        if (CurrentPhase != Phase.Handoff && !(CurrentPhase == Phase.Aiming && paused))
+            DrawHealth(width);
         GUI.matrix = previousMatrix;
+    }
+
+    private void DrawHealth(float width)
+    {
+        float panelWidth = (width - 48f) * 0.5f;
+        HealthPanel(new Rect(16f, 108f, panelWidth, 50f), "P1", PlayerOneHealth, new Color(0.08f, 0.72f, 0.96f));
+        HealthPanel(new Rect(32f + panelWidth, 108f, panelWidth, 50f), "P2", PlayerTwoHealth, new Color(1f, 0.43f, 0.12f));
+    }
+
+    private void HealthPanel(Rect panel, string playerName, ArenaPlayerHealth health, Color teamColor)
+    {
+        Fill(panel, health.WasRecentlyHit ? new Color(0.5f, 0.08f, 0.08f, 0.96f) : new Color(0.02f, 0.03f, 0.045f, 0.96f));
+        GUI.Label(new Rect(panel.x + 8f, panel.y + 3f, panel.width - 16f, 28f), playerName + "  " + health.CurrentHealth + " / " + health.MaximumHealth + " HP", textStyle);
+        float segmentWidth = (panel.width - 24f) / health.MaximumHealth;
+        for (int i = 0; i < health.MaximumHealth; i++)
+            Fill(new Rect(panel.x + 12f + i * segmentWidth, panel.y + 36f, segmentWidth - 4f, 7f), i < health.CurrentHealth ? teamColor : new Color(0.19f, 0.22f, 0.27f));
     }
 
     private void Header(float width, string title, string detail)

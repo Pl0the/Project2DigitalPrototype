@@ -58,6 +58,10 @@ public sealed class ArenaBall : MonoBehaviour
             Direction = Vector3.Reflect(Direction, normal).normalized;
             LastHitCollider = hit.collider;
             BounceCount++;
+
+            ArenaPlayerHealth health = hit.collider.GetComponentInParent<ArenaPlayerHealth>();
+            if (health != null)
+                health.TakeDamage();
         }
 
         position.y = height;

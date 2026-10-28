@@ -132,6 +132,7 @@ GameObject:
   - component: {fileID: 8500425}
   - component: {fileID: 8500429}
   - component: {fileID: 8500428}
+  - component: {fileID: 8500430}
   m_Layer: 0
   m_Name: P2
   m_TagString: Untagged
@@ -256,6 +257,19 @@ CharacterController:
   m_SkinWidth: 0.04
   m_MinMoveDistance: 0
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &8500430
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8500423}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f5ee870f2cf6e45af9bf9c896bc759b0, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::ArenaPlayerHealth
+  maximumHealth: 6
 --- !u!1 &67115498
 GameObject:
   m_ObjectHideFlags: 0
@@ -1904,6 +1918,7 @@ GameObject:
   - component: {fileID: 1526358651}
   - component: {fileID: 1526358654}
   - component: {fileID: 1526358655}
+  - component: {fileID: 1526358656}
   m_Layer: 0
   m_Name: P1
   m_TagString: Untagged
@@ -2028,6 +2043,19 @@ MonoBehaviour:
   areaMaximum: {x: 0, y: 8}
   eyeOffset: 0.6
   aimMarker: {fileID: 214024639}
+--- !u!114 &1526358656
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1526358649}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f5ee870f2cf6e45af9bf9c896bc759b0, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::ArenaPlayerHealth
+  maximumHealth: 6
 --- !u!1 &1551659759
 GameObject:
   m_ObjectHideFlags: 0
