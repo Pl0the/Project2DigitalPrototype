@@ -21,7 +21,7 @@ public sealed class ArenaBlock : MonoBehaviour
         IsPreview = preview;
         IsTemporary = temporary;
         GetComponent<BoxCollider>().enabled = !preview;
-        SetColor(owner == 0 ? (temporary ? new Color(0.35f, 0.9f, 1f) : new Color(0.08f, 0.72f, 0.96f)) : (temporary ? new Color(1f, 0.72f, 0.3f) : new Color(1f, 0.43f, 0.12f)));
+        SetColor(temporary ? ArenaTeamColors.Clone(owner) : ArenaTeamColors.Accent(owner));
     }
 
     public void ShowPlacementValidity(bool valid)

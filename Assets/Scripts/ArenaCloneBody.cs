@@ -26,7 +26,7 @@ public sealed class ArenaCloneBody : MonoBehaviour
         renderers = GetComponentsInChildren<Renderer>();
         character.enabled = !preview;
         transform.rotation = owner.transform.rotation;
-        SetColor(ownerIndex == 0 ? new Color(0.35f, 0.9f, 1f) : new Color(1f, 0.72f, 0.3f));
+        SetColor(ArenaTeamColors.Clone(ownerIndex));
         if (!preview)
         {
             Owner.MovementRequested += CopyMovement;

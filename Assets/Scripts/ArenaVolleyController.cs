@@ -50,9 +50,9 @@ public sealed class ArenaVolleyController : MonoBehaviour
         VolleyNumber++;
         Physics.SyncTransforms();
         if (VolleyNumber <= firstShots)
-            Spawn(firstPlayer, "P1 Ball", new Color(0.08f, 0.72f, 0.96f));
+            Spawn(firstPlayer, "P1 Ball", ArenaTeamColors.Accent(0));
         if (VolleyNumber <= secondShots)
-            Spawn(secondPlayer, "P2 Ball", new Color(1f, 0.43f, 0.12f));
+            Spawn(secondPlayer, "P2 Ball", ArenaTeamColors.Accent(1));
         TimeRemaining = duration;
     }
 

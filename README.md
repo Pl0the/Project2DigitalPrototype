@@ -6,7 +6,7 @@ The project uses Git LFS. After cloning, run `git lfs install` and `git lfs pull
 
 ## Playing on one computer
 
-1. Press Enter to start card setup. The overhead board is public.
+1. Press Enter to start card setup. The overhead board is public. P1 is blue and P2 is red; hand, setup, placement, and aiming screens use the active player's color, matching their arena half. The health panel marks whose turn it is.
 2. Press H, ask the other player to look away, then press Space to reveal your hand. Click a card or press its number.
 3. An Attack queues one shot and passes the turn. A Block returns to the board for placement. A Clone lets you copy your body or an owned block. Placement cards are spent only after a valid placement.
 4. Take turns playing one card at a time. Press Tab to finish your own setup and save your remaining cards. If one player finishes or empties their hand, the other can keep playing until they finish.

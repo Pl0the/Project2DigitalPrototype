@@ -45,6 +45,9 @@ public sealed class HotSeatAimController : MonoBehaviour
     public ArenaBlockPlacement Placement => blockPlacement;
     public ArenaCloneController Clones => cloneController;
     private ArenaPlayerMotor ActivePlayer => ActivePlayerIndex == 0 ? playerOne : playerTwo;
+    private Color TurnAccent => ActivePlayerIndex >= 0 ? ArenaTeamColors.Accent(ActivePlayerIndex) : new Color(0.55f, 0.65f, 0.75f);
+    private Color TurnSurface => ActivePlayerIndex >= 0 ? ArenaTeamColors.Surface(ActivePlayerIndex) : new Color(0.035f, 0.045f, 0.06f);
+    private string TurnName => "P" + (ActivePlayerIndex + 1) + " " + ArenaTeamColors.Name(ActivePlayerIndex);
 
     private void Awake()
     {
@@ -470,15 +473,22 @@ public sealed class HotSeatAimController : MonoBehaviour
             return;
 
         EnsureStyles();
+        titleStyle.normal.textColor = ActivePlayerIndex >= 0 ? Color.Lerp(TurnAccent, Color.white, 0.25f) : Color.white;
         bool privateView = CurrentPhase == Phase.Handoff || CurrentPhase == Phase.CardHandoff || CurrentPhase == Phase.Hand || (CurrentPhase == Phase.Aiming && paused);
         if (privateView)
-            Fill(new Rect(0f, 0f, Screen.width, Screen.height), new Color(0.015f, 0.02f, 0.03f, 1f));
+            Fill(new Rect(0f, 0f, Screen.width, Screen.height), ArenaTeamColors.Background(ActivePlayerIndex));
 
         Matrix4x4 previousMatrix = GUI.matrix;
         float scale = Mathf.Min(Screen.width / 960f, Screen.height / 640f);
         GUI.matrix = Matrix4x4.Scale(new Vector3(scale, scale, 1f));
         float width = Screen.width / scale;
         float height = Screen.height / scale;
+
+        if (ActivePlayerIndex >= 0)
+        {
+            Fill(new Rect(0f, 0f, 5f, height), TurnAccent);
+            Fill(new Rect(width - 5f, 0f, 5f, height), TurnAccent);
+        }
 
         if (!privateView)
         {
@@ -489,8 +499,8 @@ public sealed class HotSeatAimController : MonoBehaviour
         if (CurrentPhase == Phase.CardHandoff)
         {
             Rect panel = CenterPanel(width, height);
-            Panel(panel, "PLAYER " + (ActivePlayerIndex + 1), "Private hand.\nOther player: look away before revealing cards.");
-            if (GUI.Button(new Rect(panel.x + 50f, panel.y + 182f, 420f, 48f), "Reveal hand  [Space]", buttonStyle))
+            Panel(panel, TurnName + " TEAM", "Private hand.\nOther player: look away before revealing cards.");
+            if (ThemedButton(new Rect(panel.x + 50f, panel.y + 182f, 420f, 48f), "Reveal hand  [Space]", buttonStyle))
                 RevealHand();
         }
         else if (CurrentPhase == Phase.Hand)
@@ -500,20 +510,20 @@ public sealed class HotSeatAimController : MonoBehaviour
         else if (CurrentPhase == Phase.Handoff)
         {
             Rect panel = CenterPanel(width, height);
-            Panel(panel, "PLAYER " + (ActivePlayerIndex + 1), "Your turn to move and aim.\nOther player: look away before continuing.");
-            if (GUI.Button(new Rect(panel.x + 50f, panel.y + 182f, 420f, 48f), "Ready  [Space]", buttonStyle))
+            Panel(panel, TurnName + " TEAM", "Your turn to move and aim.\nOther player: look away before continuing.");
+            if (ThemedButton(new Rect(panel.x + 50f, panel.y + 182f, 420f, 48f), "Ready  [Space]", buttonStyle))
                 Ready();
         }
         else if (CurrentPhase == Phase.Aiming && paused)
         {
             Rect panel = CenterPanel(width, height);
-            Panel(panel, "PAUSED", "The mouse is released.\nResume when you are ready to keep aiming.");
-            if (GUI.Button(new Rect(panel.x + 50f, panel.y + 182f, 420f, 48f), "Resume  [Esc]", buttonStyle))
+            Panel(panel, TurnName + "  |  PAUSED", "The mouse is released.\nResume when you are ready to keep aiming.");
+            if (ThemedButton(new Rect(panel.x + 50f, panel.y + 182f, 420f, 48f), "Resume  [Esc]", buttonStyle))
                 SetPaused(false);
         }
         else if (CurrentPhase == Phase.Aiming)
         {
-            Header(width, "P" + (ActivePlayerIndex + 1) + "  |  MOVE & AIM", "WASD: move    Mouse: aim    Enter: confirm    Esc: pause");
+            Header(width, TurnName + "  |  MOVE & AIM", "WASD: move    Mouse: aim    Enter: confirm    Esc: pause");
             Fill(new Rect(width * 0.5f - 8f, height * 0.5f - 1f, 16f, 2f), Color.white);
             Fill(new Rect(width * 0.5f - 1f, height * 0.5f - 8f, 2f, 16f), Color.white);
         }
@@ -531,7 +541,7 @@ public sealed class HotSeatAimController : MonoBehaviour
             string resultTitle = Result == MatchResult.Draw ? "DRAW" : Result == MatchResult.PlayerOneWins ? "PLAYER 1 WINS" : "PLAYER 2 WINS";
             string resultDetail = Result == MatchResult.Draw ? "Both players were knocked out in the same volley." : "The other player has no health remaining.";
             Panel(panel, resultTitle, resultDetail);
-            if (GUI.Button(new Rect(panel.x + 50f, panel.y + 182f, 420f, 48f), "New match  [Enter]", buttonStyle))
+            if (ThemedButton(new Rect(panel.x + 50f, panel.y + 182f, 420f, 48f), "New match  [Enter]", buttonStyle))
                 Restart();
         }
         else
@@ -542,17 +552,17 @@ public sealed class HotSeatAimController : MonoBehaviour
             Header(width, title, detail);
             if (locked)
             {
-                if (GUI.Button(new Rect(width - 280f, height - 66f, 260f, 46f), "Next round  [Enter]", buttonStyle))
+                if (ThemedButton(new Rect(width - 280f, height - 66f, 260f, 46f), "Next round  [Enter]", buttonStyle))
                     BeginNextRound();
             }
             else
             {
-                if (GUI.Button(new Rect(20f, height - 66f, 300f, 46f), "First to place: P" + (firstPlacementPlayer + 1), buttonStyle))
+                if (ThemedButton(new Rect(20f, height - 66f, 300f, 46f), "First to place: P" + (firstPlacementPlayer + 1), buttonStyle))
                     SetFirstPlacementPlayer(1 - firstPlacementPlayer);
-                if (GUI.Button(new Rect(width - 280f, height - 66f, 260f, 46f), "Start setup  [Enter]", buttonStyle))
+                if (ThemedButton(new Rect(width - 280f, height - 66f, 260f, 46f), "Start setup  [Enter]", buttonStyle))
                     BeginSetupPhase();
             }
-            if (locked && GUI.Button(new Rect(20f, height - 66f, 220f, 46f), "Restart", buttonStyle))
+            if (locked && ThemedButton(new Rect(20f, height - 66f, 220f, 46f), "Restart", buttonStyle))
                 Restart();
         }
 
@@ -569,35 +579,35 @@ public sealed class HotSeatAimController : MonoBehaviour
             return;
         }
         bool placing = pendingBlockCard >= 0;
-        string title = "ROUND " + RoundNumber + "  |  P" + (ActivePlayerIndex + 1) + (placing ? " PLACE BLOCK" : " PLAY ONE CARD");
+        string title = "ROUND " + RoundNumber + "  |  " + TurnName + (placing ? " PLACE BLOCK" : " PLAY ONE CARD");
         string detail = "Queued shots: P1 " + cardController.GetAttackCount(0) + "  /  P2 " + cardController.GetAttackCount(1);
         Header(width, title, detail);
-        Fill(new Rect(16f, height - 124f, width - 32f, 112f), new Color(0.02f, 0.03f, 0.045f, 0.97f));
+        TurnPanel(new Rect(16f, height - 124f, width - 32f, 112f));
         string message = placing ? "Mouse / WASD: place  |  Q / E / scroll: rotate  |  Green: valid  |  Tab: finish setup" : cardController.LastAction;
         if (string.IsNullOrEmpty(message))
             message = "Public board. Reveal your hand privately, play one card, then pass the computer.";
         GUI.Label(new Rect(26f, height - 116f, width - 52f, 36f), message, textStyle);
         if (placing)
         {
-            if (GUI.Button(new Rect(26f, height - 68f, 180f, 46f), "Cancel  [Esc]", buttonStyle))
+            if (ThemedButton(new Rect(26f, height - 68f, 180f, 46f), "Cancel  [Esc]", buttonStyle))
                 CancelBlockPlacement();
-            if (GUI.Button(new Rect(222f, height - 68f, 110f, 46f), "-15  [Q]", buttonStyle))
+            if (ThemedButton(new Rect(222f, height - 68f, 110f, 46f), "-15  [Q]", buttonStyle))
                 blockPlacement.RotatePreview(-15f);
-            if (GUI.Button(new Rect(344f, height - 68f, 110f, 46f), "+15  [E]", buttonStyle))
+            if (ThemedButton(new Rect(344f, height - 68f, 110f, 46f), "+15  [E]", buttonStyle))
                 blockPlacement.RotatePreview(15f);
             bool previous = GUI.enabled;
             GUI.enabled = blockPlacement.IsPreviewValid;
-            if (GUI.Button(new Rect(width - 280f, height - 68f, 254f, 46f), "Place  [Enter]", buttonStyle))
+            if (ThemedButton(new Rect(width - 280f, height - 68f, 254f, 46f), "Place  [Enter]", buttonStyle))
                 ConfirmBlockPlacement();
             GUI.enabled = previous;
         }
         else
         {
-            if (GUI.Button(new Rect(26f, height - 68f, 240f, 46f), "Private hand  [H]", buttonStyle))
+            if (ThemedButton(new Rect(26f, height - 68f, 240f, 46f), "Private hand  [H]", buttonStyle))
                 OpenHand();
             string status = cardController.HasFinished(1 - ActivePlayerIndex) ? "Opponent finished. Keep playing if you want." : "One card per turn. Keep any cards you do not use.";
             GUI.Label(new Rect(280f, height - 74f, width - 570f, 60f), status, textStyle);
-            if (GUI.Button(new Rect(width - 280f, height - 68f, 254f, 46f), "Finish setup  [Tab]", buttonStyle))
+            if (ThemedButton(new Rect(width - 280f, height - 68f, 254f, 46f), "Finish setup  [Tab]", buttonStyle))
                 EndSetup();
         }
     }
@@ -605,22 +615,22 @@ public sealed class HotSeatAimController : MonoBehaviour
     private void DrawHand(float width, float height)
     {
         var hand = cardController.GetHand(ActivePlayerIndex);
-        Header(width, "P" + (ActivePlayerIndex + 1) + "  |  PRIVATE HAND", hand.Count + " / " + cardController.HandLimit + " cards  |  Newest cards discarded this round: " + cardController.GetDiscardedCount(ActivePlayerIndex));
+        Header(width, TurnName + "  |  PRIVATE HAND", hand.Count + " / " + cardController.HandLimit + " cards  |  Newest cards discarded this round: " + cardController.GetDiscardedCount(ActivePlayerIndex));
         GUI.Label(new Rect(24f, 140f, width - 48f, 60f), "Choose one card. Unplayed cards stay in your hand for later rounds.", textStyle);
         float slotWidth = Mathf.Min(150f, (width - 48f) / 6f);
         float left = (width - hand.Count * slotWidth) * 0.5f;
         for (int i = 0; i < hand.Count; i++)
         {
             string text = hand[i] == ArenaCardKind.Attack ? "ATTACK\n\n1 shot" : hand[i] == ArenaCardKind.Block ? "BLOCK\n\n3 HP wall" : "CLONE\n\nBody / wall\n1 round";
-            if (GUI.Button(new Rect(left + i * slotWidth + 4f, height * 0.5f - 70f, slotWidth - 8f, 180f), text + "\n\n[" + (i + 1) + "]", buttonStyle))
+            if (ThemedButton(new Rect(left + i * slotWidth + 4f, height * 0.5f - 70f, slotWidth - 8f, 180f), text + "\n\n[" + (i + 1) + "]", buttonStyle))
             {
                 SelectCard(i);
                 break;
             }
         }
-        if (GUI.Button(new Rect(24f, height - 70f, 240f, 46f), "Back to board  [Esc]", buttonStyle))
+        if (ThemedButton(new Rect(24f, height - 70f, 240f, 46f), "Back to board  [Esc]", buttonStyle))
             ShowSetupView();
-        if (GUI.Button(new Rect(width - 280f, height - 70f, 256f, 46f), "Finish setup  [Tab]", buttonStyle))
+        if (ThemedButton(new Rect(width - 280f, height - 70f, 256f, 46f), "Finish setup  [Tab]", buttonStyle))
             EndSetup();
     }
 
@@ -651,50 +661,50 @@ public sealed class HotSeatAimController : MonoBehaviour
         bool block = mode == ArenaCloneController.PlacementMode.Block;
         bool selecting = mode == ArenaCloneController.PlacementMode.ChooseBlock;
         string title = body ? "PLACE BODY CLONE" : block ? "PLACE CLONED BLOCK" : selecting ? "CHOOSE SOURCE BLOCK" : "CHOOSE CLONE TARGET";
-        Header(width, "P" + (ActivePlayerIndex + 1) + "  |  " + title, "All clones expire after this round's final volley.");
-        Fill(new Rect(16f, height - 124f, width - 32f, 112f), new Color(0.02f, 0.03f, 0.045f, 0.97f));
+        Header(width, TurnName + "  |  " + title, "All clones expire after this round's final volley.");
+        TurnPanel(new Rect(16f, height - 124f, width - 32f, 112f));
         ArenaBlock source = selecting ? cloneController.SelectedSource : null;
         string message = body ? "Mouse / WASD: place  |  Copies your movement and aim  |  Hit once: disappears"
             : block ? "Mouse / WASD: place  |  Q / E / scroll: rotate  |  Copies the source's remaining durability"
             : selecting ? "Source " + cloneController.SourceNumber + " / " + cloneController.SourceCount + (source == null ? "" : "  |  " + source.RemainingDurability + " / 3 durability") + "  |  Click a block or use Q / E"
             : "Choose your body or an owned block. The Clone card is spent only after a valid placement.";
         GUI.Label(new Rect(26f, height - 116f, width - 52f, 36f), message, textStyle);
-        if (GUI.Button(new Rect(26f, height - 68f, 180f, 46f), "Cancel  [Esc]", buttonStyle))
+        if (ThemedButton(new Rect(26f, height - 68f, 180f, 46f), "Cancel  [Esc]", buttonStyle))
             CancelBlockPlacement();
         if (body || block)
         {
             if (block)
             {
-                if (GUI.Button(new Rect(222f, height - 68f, 110f, 46f), "-15  [Q]", buttonStyle))
+                if (ThemedButton(new Rect(222f, height - 68f, 110f, 46f), "-15  [Q]", buttonStyle))
                     blockPlacement.RotatePreview(-15f);
-                if (GUI.Button(new Rect(344f, height - 68f, 110f, 46f), "+15  [E]", buttonStyle))
+                if (ThemedButton(new Rect(344f, height - 68f, 110f, 46f), "+15  [E]", buttonStyle))
                     blockPlacement.RotatePreview(15f);
             }
             bool previous = GUI.enabled;
             GUI.enabled = cloneController.IsPlacementValid;
-            if (GUI.Button(new Rect(width - 280f, height - 68f, 254f, 46f), "Place clone  [Enter]", buttonStyle))
+            if (ThemedButton(new Rect(width - 280f, height - 68f, 254f, 46f), "Place clone  [Enter]", buttonStyle))
                 ConfirmClonePlacement();
             GUI.enabled = previous;
         }
         else if (selecting)
         {
-            if (GUI.Button(new Rect(222f, height - 68f, 110f, 46f), "Prev [Q]", buttonStyle))
+            if (ThemedButton(new Rect(222f, height - 68f, 110f, 46f), "Prev [Q]", buttonStyle))
                 cloneController.CycleSource(-1);
-            if (GUI.Button(new Rect(344f, height - 68f, 110f, 46f), "Next [E]", buttonStyle))
+            if (ThemedButton(new Rect(344f, height - 68f, 110f, 46f), "Next [E]", buttonStyle))
                 cloneController.CycleSource(1);
             bool previous = GUI.enabled;
             GUI.enabled = source != null;
-            if (GUI.Button(new Rect(width - 280f, height - 68f, 254f, 46f), "Copy block  [Enter]", buttonStyle))
+            if (ThemedButton(new Rect(width - 280f, height - 68f, 254f, 46f), "Copy block  [Enter]", buttonStyle))
                 cloneController.BeginBlockCopy();
             GUI.enabled = previous;
         }
         else
         {
-            if (GUI.Button(new Rect(222f, height - 68f, 230f, 46f), "Clone body  [B]", buttonStyle))
+            if (ThemedButton(new Rect(222f, height - 68f, 230f, 46f), "Clone body  [B]", buttonStyle))
                 cloneController.ChooseBody();
             bool previous = GUI.enabled;
             GUI.enabled = cloneController.SourceCount > 0;
-            if (GUI.Button(new Rect(width - 280f, height - 68f, 254f, 46f), "Clone block  [K]", buttonStyle))
+            if (ThemedButton(new Rect(width - 280f, height - 68f, 254f, 46f), "Clone block  [K]", buttonStyle))
                 cloneController.ChooseBlock();
             GUI.enabled = previous;
         }
@@ -721,14 +731,19 @@ public sealed class HotSeatAimController : MonoBehaviour
     private void DrawHealth(float width)
     {
         float panelWidth = (width - 48f) * 0.5f;
-        HealthPanel(new Rect(16f, 108f, panelWidth, 50f), "P1", PlayerOneHealth, new Color(0.08f, 0.72f, 0.96f));
-        HealthPanel(new Rect(32f + panelWidth, 108f, panelWidth, 50f), "P2", PlayerTwoHealth, new Color(1f, 0.43f, 0.12f));
+        HealthPanel(new Rect(16f, 108f, panelWidth, 50f), 0, PlayerOneHealth);
+        HealthPanel(new Rect(32f + panelWidth, 108f, panelWidth, 50f), 1, PlayerTwoHealth);
     }
 
-    private void HealthPanel(Rect panel, string playerName, ArenaPlayerHealth health, Color teamColor)
+    private void HealthPanel(Rect panel, int player, ArenaPlayerHealth health)
     {
-        Fill(panel, health.WasRecentlyHit ? new Color(0.5f, 0.08f, 0.08f, 0.96f) : new Color(0.02f, 0.03f, 0.045f, 0.96f));
-        GUI.Label(new Rect(panel.x + 8f, panel.y + 3f, panel.width - 16f, 28f), playerName + "  " + health.CurrentHealth + " / " + health.MaximumHealth + " HP", textStyle);
+        Color teamColor = ArenaTeamColors.Accent(player);
+        bool active = ActivePlayerIndex == player;
+        Fill(panel, health.WasRecentlyHit ? new Color(0.5f, 0.08f, 0.08f, 0.96f) : ArenaTeamColors.Surface(player));
+        if (active)
+            Fill(new Rect(panel.x, panel.y, panel.width, 3f), teamColor);
+        string playerName = "P" + (player + 1) + " " + ArenaTeamColors.Name(player);
+        GUI.Label(new Rect(panel.x + 8f, panel.y + 3f, panel.width - 16f, 28f), playerName + "  |  " + health.CurrentHealth + " / " + health.MaximumHealth + " HP" + (active ? "  |  YOUR TURN" : ""), textStyle);
         float segmentWidth = (panel.width - 24f) / health.MaximumHealth;
         for (int i = 0; i < health.MaximumHealth; i++)
             Fill(new Rect(panel.x + 12f + i * segmentWidth, panel.y + 36f, segmentWidth - 4f, 7f), i < health.CurrentHealth ? teamColor : new Color(0.19f, 0.22f, 0.27f));
@@ -736,16 +751,32 @@ public sealed class HotSeatAimController : MonoBehaviour
 
     private void Header(float width, string title, string detail)
     {
-        Fill(new Rect(16f, 12f, width - 32f, 88f), new Color(0.02f, 0.03f, 0.045f, 0.96f));
+        TurnPanel(new Rect(16f, 12f, width - 32f, 88f));
         GUI.Label(new Rect(30f, 18f, width - 60f, 38f), title, titleStyle);
         GUI.Label(new Rect(30f, 58f, width - 60f, 30f), detail, textStyle);
     }
 
     private void Panel(Rect panel, string title, string detail)
     {
-        Fill(panel, new Color(0.065f, 0.085f, 0.12f));
+        TurnPanel(panel);
         GUI.Label(new Rect(panel.x + 25f, panel.y + 25f, panel.width - 50f, 45f), title, titleStyle);
         GUI.Label(new Rect(panel.x + 25f, panel.y + 85f, panel.width - 50f, 65f), detail, textStyle);
+    }
+
+    private void TurnPanel(Rect panel)
+    {
+        Fill(panel, TurnSurface);
+        Fill(new Rect(panel.x, panel.y, panel.width, 4f), TurnAccent);
+    }
+
+    private bool ThemedButton(Rect rect, string text, GUIStyle style)
+    {
+        bool hovered = GUI.enabled && rect.Contains(Event.current.mousePosition);
+        Color border = GUI.enabled ? TurnAccent : new Color(0.24f, 0.27f, 0.32f);
+        Color background = GUI.enabled ? Color.Lerp(TurnSurface, TurnAccent, hovered ? 0.5f : 0.25f) : new Color(0.075f, 0.085f, 0.1f);
+        Fill(rect, border);
+        Fill(new Rect(rect.x + 2f, rect.y + 2f, rect.width - 4f, rect.height - 4f), background);
+        return GUI.Button(rect, text, style);
     }
 
     private static Rect CenterPanel(float width, float height)
@@ -769,6 +800,7 @@ public sealed class HotSeatAimController : MonoBehaviour
         titleStyle.normal.textColor = Color.white;
         textStyle = new GUIStyle(GUI.skin.label) { fontSize = 18, alignment = TextAnchor.MiddleCenter, wordWrap = true };
         textStyle.normal.textColor = new Color(0.78f, 0.84f, 0.92f);
-        buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = 20, fontStyle = FontStyle.Bold };
+        buttonStyle = new GUIStyle(GUI.skin.label) { fontSize = 20, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, wordWrap = true };
+        buttonStyle.normal.textColor = Color.white;
     }
 }
