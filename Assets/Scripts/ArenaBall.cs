@@ -17,7 +17,7 @@ public sealed class ArenaBall : MonoBehaviour
     public int BounceCount { get; private set; }
     public Collider LastHitCollider { get; private set; }
 
-    public void Initialize(ArenaPlayerMotor shooter, Vector3 position, Vector3 direction, float speed, Color color)
+    public void Initialize(ArenaPlayerMotor shooter, Vector3 position, Vector3 direction, float speed, Color color, Collider firingCollider = null)
     {
         transform.position = position;
         height = position.y;
@@ -26,7 +26,7 @@ public sealed class ArenaBall : MonoBehaviour
         Speed = Mathf.Max(0f, speed);
         BounceCount = 0;
         LastHitCollider = null;
-        shooterCollider = shooter == null ? null : shooter.GetComponent<CharacterController>();
+        shooterCollider = firingCollider != null ? firingCollider : shooter == null ? null : shooter.GetComponent<CharacterController>();
         leavingShooter = shooterCollider != null;
         SphereCollider sphere = GetComponent<SphereCollider>();
         radius = sphere.radius * Mathf.Abs(transform.lossyScale.x);
@@ -53,10 +53,18 @@ public sealed class ArenaBall : MonoBehaviour
             }
 
             float travel = Mathf.Max(0f, hit.distance - ContactPadding);
-            position += Direction * travel + normal * ContactPadding;
+            position += Direction * travel;
             remaining = Mathf.Max(0f, remaining - travel - ContactPadding);
-            Direction = Vector3.Reflect(Direction, normal).normalized;
             LastHitCollider = hit.collider;
+            ArenaCloneBody clone = hit.collider.GetComponentInParent<ArenaCloneBody>();
+            if (clone != null)
+            {
+                clone.Shatter();
+                position += Direction * ContactPadding;
+                continue;
+            }
+            position += normal * ContactPadding;
+            Direction = Vector3.Reflect(Direction, normal).normalized;
             BounceCount++;
 
             ArenaPlayerHealth health = hit.collider.GetComponentInParent<ArenaPlayerHealth>();

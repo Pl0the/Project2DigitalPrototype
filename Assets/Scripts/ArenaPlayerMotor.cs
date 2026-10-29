@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -19,6 +20,10 @@ public sealed class ArenaPlayerMotor : MonoBehaviour
     public bool CanControl { get; private set; }
     public Vector3 EyePosition => transform.position + Vector3.up * eyeOffset;
     public Vector3 AimDirection => transform.forward;
+    public Vector2 AreaMinimum => areaMinimum;
+    public Vector2 AreaMaximum => areaMaximum;
+    public event Action<Vector3> MovementRequested;
+    public event Action<Quaternion> AimChanged;
 
     private void Awake()
     {
@@ -58,17 +63,22 @@ public sealed class ArenaPlayerMotor : MonoBehaviour
         EnsureReferences();
         input = Vector2.ClampMagnitude(input, 1f);
         Vector3 direction = transform.right * input.x + transform.forward * input.y;
-        Vector3 target = transform.position + direction * (moveSpeed * Mathf.Max(0f, deltaTime));
+        Vector3 requestedMovement = direction * (moveSpeed * Mathf.Max(0f, deltaTime));
+        Vector3 target = transform.position + requestedMovement;
         float margin = character.radius + character.skinWidth;
         target.x = Mathf.Clamp(target.x, areaMinimum.x + margin, areaMaximum.x - margin);
         target.z = Mathf.Clamp(target.z, areaMinimum.y + margin, areaMaximum.y - margin);
         character.Move(target - transform.position);
+        MovementRequested?.Invoke(requestedMovement);
     }
 
     public void Look(float horizontalDelta)
     {
         if (CanControl)
+        {
             transform.Rotate(0f, horizontalDelta * mouseSensitivity, 0f, Space.World);
+            AimChanged?.Invoke(transform.rotation);
+        }
     }
 
     public void SetBodyVisible(bool visible)

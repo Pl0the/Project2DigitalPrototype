@@ -9,6 +9,7 @@ public sealed class ArenaVolleyController : MonoBehaviour
     [SerializeField, Min(0.1f)] private float duration = 5f;
     [SerializeField, Min(0.1f)] private float ballSpeed = 12f;
     [SerializeField] private float ballHeight = 1.2f;
+    [SerializeField] private ArenaCloneController cloneController;
 
     private readonly List<ArenaBall> balls = new List<ArenaBall>();
     private ArenaPlayerMotor firstPlayer;
@@ -96,13 +97,22 @@ public sealed class ArenaVolleyController : MonoBehaviour
 
     private void Spawn(ArenaPlayerMotor shooter, string name, Color color)
     {
+        SpawnBody(shooter, shooter.transform.position, shooter.GetComponent<CharacterController>(), name, color);
+        if (cloneController == null)
+            return;
+        foreach (ArenaCloneBody clone in cloneController.Bodies)
+            if (clone != null && clone.IsAlive && clone.Owner == shooter)
+                SpawnBody(shooter, clone.transform.position, clone.BodyCollider, name + " (Clone)", color);
+    }
+
+    private void SpawnBody(ArenaPlayerMotor shooter, Vector3 position, Collider body, string name, Color color)
+    {
         // Start inside the shooter's footprint so a nearby wall cannot put the
         // muzzle outside the arena. The ball ignores its shooter until clear.
-        Vector3 position = shooter.transform.position;
         position.y = ballHeight;
         ArenaBall ball = Instantiate(ballPrefab, position, Quaternion.identity);
         ball.name = name;
-        ball.Initialize(shooter, position, shooter.AimDirection, ballSpeed, color);
+        ball.Initialize(shooter, position, shooter.AimDirection, ballSpeed, color, body);
         balls.Add(ball);
     }
 

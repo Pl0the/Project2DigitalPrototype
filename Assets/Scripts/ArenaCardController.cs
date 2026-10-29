@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum ArenaCardKind { Attack, Block }
+public enum ArenaCardKind { Attack, Block, Clone }
 
 [DisallowMultipleComponent]
 public sealed class ArenaCardController : MonoBehaviour
@@ -54,15 +54,15 @@ public sealed class ArenaCardController : MonoBehaviour
                 DrawCard(player, ArenaCardKind.Attack);
                 DrawCard(player, ArenaCardKind.Block);
                 DrawCard(player, ArenaCardKind.Attack);
-                DrawCard(player, ArenaCardKind.Block);
-                DrawCard(player, ArenaCardKind.Block);
+                DrawCard(player, ArenaCardKind.Clone);
+                DrawCard(player, ArenaCardKind.Clone);
             }
             else
             {
                 // Draw the guaranteed attack first so overflow discards the newest cards.
                 DrawCard(player, ArenaCardKind.Attack);
                 for (int card = 1; card < cardsPerRound; card++)
-                    DrawCard(player, Random.value < 0.5f ? ArenaCardKind.Attack : ArenaCardKind.Block);
+                    DrawCard(player, (ArenaCardKind)Random.Range(0, 3));
             }
         }
         ActivePlayerIndex = Mathf.Clamp(firstPlayer, 0, 1);

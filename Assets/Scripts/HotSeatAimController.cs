@@ -14,6 +14,7 @@ public sealed class HotSeatAimController : MonoBehaviour
     [SerializeField] private ArenaVolleyController volleyController;
     [SerializeField] private ArenaCardController cardController;
     [SerializeField] private ArenaBlockPlacement blockPlacement;
+    [SerializeField] private ArenaCloneController cloneController;
     [SerializeField, Range(40f, 100f)] private float firstPersonFieldOfView = 75f;
 
     private Vector3 overviewPosition;
@@ -28,6 +29,7 @@ public sealed class HotSeatAimController : MonoBehaviour
     private int confirmedPlayers;
     private bool paused;
     private int pendingBlockCard = -1;
+    private int pendingCloneCard = -1;
     private GUIStyle titleStyle;
     private GUIStyle textStyle;
     private GUIStyle buttonStyle;
@@ -41,13 +43,14 @@ public sealed class HotSeatAimController : MonoBehaviour
     public ArenaPlayerHealth PlayerTwoHealth { get; private set; }
     public ArenaCardController Cards => cardController;
     public ArenaBlockPlacement Placement => blockPlacement;
+    public ArenaCloneController Clones => cloneController;
     private ArenaPlayerMotor ActivePlayer => ActivePlayerIndex == 0 ? playerOne : playerTwo;
 
     private void Awake()
     {
-        if (playerOne == null || playerTwo == null || viewCamera == null || volleyController == null || cardController == null || blockPlacement == null)
+        if (playerOne == null || playerTwo == null || viewCamera == null || volleyController == null || cardController == null || blockPlacement == null || cloneController == null)
         {
-            Debug.LogError("Assign both players, the camera, and the volley, card, and block controllers.", this);
+            Debug.LogError("Assign both players, the camera, and the volley, card, block, and clone controllers.", this);
             enabled = false;
             return;
         }
@@ -99,6 +102,8 @@ public sealed class HotSeatAimController : MonoBehaviour
                 EndSetup();
             else if (keyboard.hKey.wasPressedThisFrame)
                 OpenHand();
+            else if (pendingCloneCard >= 0)
+                HandleCloneInput(keyboard);
             else if (pendingBlockCard >= 0)
             {
                 if (keyboard.escapeKey.wasPressedThisFrame)
@@ -141,6 +146,39 @@ public sealed class HotSeatAimController : MonoBehaviour
                 SetPaused(!paused);
             else if (!paused && (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame))
                 ConfirmAim();
+        }
+    }
+
+    private void HandleCloneInput(Keyboard keyboard)
+    {
+        if (keyboard.escapeKey.wasPressedThisFrame)
+            CancelBlockPlacement();
+        else if (keyboard.bKey.wasPressedThisFrame)
+            cloneController.ChooseBody();
+        else if (keyboard.kKey.wasPressedThisFrame)
+            cloneController.ChooseBlock();
+        else if (cloneController.Mode == ArenaCloneController.PlacementMode.ChooseBlock)
+        {
+            if (keyboard.qKey.wasPressedThisFrame)
+                cloneController.CycleSource(-1);
+            else if (keyboard.eKey.wasPressedThisFrame)
+                cloneController.CycleSource(1);
+            else if (keyboard.enterKey.wasPressedThisFrame || keyboard.spaceKey.wasPressedThisFrame)
+                cloneController.BeginBlockCopy();
+            else if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+                cloneController.ChooseSourceAt(Mouse.current.position.ReadValue());
+        }
+        else if (cloneController.Mode == ArenaCloneController.PlacementMode.ChooseTarget)
+        {
+            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+                cloneController.ChooseSourceAt(Mouse.current.position.ReadValue());
+        }
+        else if (keyboard.enterKey.wasPressedThisFrame || keyboard.spaceKey.wasPressedThisFrame)
+            ConfirmClonePlacement();
+        else if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame && blockPlacement.IsBoardPointer(Mouse.current.position.ReadValue()))
+        {
+            cloneController.UpdatePointerPosition(Mouse.current.position.ReadValue());
+            ConfirmClonePlacement();
         }
     }
 
@@ -199,6 +237,12 @@ public sealed class HotSeatAimController : MonoBehaviour
             ShowSetupView();
             blockPlacement.BeginPlacement(ActivePlayerIndex);
         }
+        else if (cardController.GetHand(ActivePlayerIndex)[index] == ArenaCardKind.Clone)
+        {
+            pendingCloneCard = index;
+            ShowSetupView();
+            cloneController.BeginClone(ActivePlayerIndex);
+        }
         else
         {
             cardController.PlayCard(index);
@@ -217,8 +261,19 @@ public sealed class HotSeatAimController : MonoBehaviour
 
     public void CancelBlockPlacement()
     {
+        cloneController.CancelPlacement();
         blockPlacement.CancelPlacement();
         pendingBlockCard = -1;
+        pendingCloneCard = -1;
+    }
+
+    public void ConfirmClonePlacement()
+    {
+        if (CurrentPhase != Phase.Setup || pendingCloneCard < 0 || !cloneController.ConfirmPlacement())
+            return;
+        cardController.PlayCard(pendingCloneCard);
+        pendingCloneCard = -1;
+        AfterSetupAction();
     }
 
     public void EndSetup()
@@ -260,6 +315,7 @@ public sealed class HotSeatAimController : MonoBehaviour
         ActivePlayer.SetBodyVisible(false);
         ArenaPlayerMotor opponent = ActivePlayerIndex == 0 ? playerTwo : playerOne;
         opponent.SetAimMarkerVisible(false);
+        cloneController.SetAimMarkersVisible(1 - ActivePlayerIndex, false);
         ActivePlayer.SetControlEnabled(true);
         FollowActivePlayer();
         SetCursorCaptured(true);
@@ -293,6 +349,7 @@ public sealed class HotSeatAimController : MonoBehaviour
             : oneDefeated ? MatchResult.PlayerTwoWins
             : twoDefeated ? MatchResult.PlayerOneWins
             : MatchResult.InProgress;
+        cloneController.ExpireClones();
         ShowOverview(Result == MatchResult.InProgress ? Phase.Locked : Phase.MatchOver);
     }
 
@@ -308,9 +365,11 @@ public sealed class HotSeatAimController : MonoBehaviour
     public void Restart()
     {
         volleyController.Cancel();
+        cloneController.ExpireClones();
         blockPlacement.ResetBoard();
         cardController.ResetMatch();
         pendingBlockCard = -1;
+        pendingCloneCard = -1;
         StopBothPlayers();
         playerOne.ResetPose(playerOneStart, playerOneRotation);
         playerTwo.ResetPose(playerTwoStart, playerTwoRotation);
@@ -353,6 +412,8 @@ public sealed class HotSeatAimController : MonoBehaviour
         playerTwo.SetControlEnabled(false);
         playerOne.SetBodyVisible(true);
         playerTwo.SetBodyVisible(true);
+        cloneController.SetAimMarkersVisible(0, true);
+        cloneController.SetAimMarkersVisible(1, true);
     }
 
     private void FollowActivePlayer()
@@ -381,6 +442,8 @@ public sealed class HotSeatAimController : MonoBehaviour
 
     private void OnDisable()
     {
+        if (cloneController != null)
+            cloneController.CancelPlacement();
         if (blockPlacement != null)
             blockPlacement.CancelPlacement();
         if (volleyController != null)
@@ -418,7 +481,10 @@ public sealed class HotSeatAimController : MonoBehaviour
         float height = Screen.height / scale;
 
         if (!privateView)
+        {
             DrawBlockDurability(scale);
+            DrawCloneLabels(scale);
+        }
 
         if (CurrentPhase == Phase.CardHandoff)
         {
@@ -497,6 +563,11 @@ public sealed class HotSeatAimController : MonoBehaviour
 
     private void DrawSetup(float width, float height)
     {
+        if (pendingCloneCard >= 0)
+        {
+            DrawCloneSetup(width, height);
+            return;
+        }
         bool placing = pendingBlockCard >= 0;
         string title = "ROUND " + RoundNumber + "  |  P" + (ActivePlayerIndex + 1) + (placing ? " PLACE BLOCK" : " PLAY ONE CARD");
         string detail = "Queued shots: P1 " + cardController.GetAttackCount(0) + "  /  P2 " + cardController.GetAttackCount(1);
@@ -540,7 +611,7 @@ public sealed class HotSeatAimController : MonoBehaviour
         float left = (width - hand.Count * slotWidth) * 0.5f;
         for (int i = 0; i < hand.Count; i++)
         {
-            string text = hand[i] == ArenaCardKind.Attack ? "ATTACK\n\n1 shot" : "BLOCK\n\n3 HP wall";
+            string text = hand[i] == ArenaCardKind.Attack ? "ATTACK\n\n1 shot" : hand[i] == ArenaCardKind.Block ? "BLOCK\n\n3 HP wall" : "CLONE\n\nBody / wall\n1 round";
             if (GUI.Button(new Rect(left + i * slotWidth + 4f, height * 0.5f - 70f, slotWidth - 8f, 180f), text + "\n\n[" + (i + 1) + "]", buttonStyle))
             {
                 SelectCard(i);
@@ -555,6 +626,7 @@ public sealed class HotSeatAimController : MonoBehaviour
 
     private void DrawBlockDurability(float scale)
     {
+        ArenaBlock source = cloneController.Mode == ArenaCloneController.PlacementMode.ChooseBlock ? cloneController.SelectedSource : null;
         foreach (ArenaBlock block in blockPlacement.Blocks)
         {
             if (block == null || block.IsBroken || !block.gameObject.activeInHierarchy)
@@ -565,9 +637,84 @@ public sealed class HotSeatAimController : MonoBehaviour
             Vector3 screen = viewCamera.WorldToScreenPoint(target + Vector3.up * 1.15f);
             if (screen.z <= 0f)
                 continue;
-            Rect label = new Rect(screen.x / scale - 38f, (Screen.height - screen.y) / scale - 14f, 76f, 28f);
+            float labelWidth = block == source ? 156f : 110f;
+            Rect label = new Rect(screen.x / scale - labelWidth * 0.5f, (Screen.height - screen.y) / scale - 14f, labelWidth, 28f);
             Fill(label, new Color(0.015f, 0.02f, 0.03f, 0.95f));
-            GUI.Label(label, block.RemainingDurability + " / " + block.MaximumDurability, textStyle);
+            GUI.Label(label, (block == source ? "SOURCE " : block.IsTemporary ? "C " : "") + block.RemainingDurability + " / " + block.MaximumDurability, textStyle);
+        }
+    }
+
+    private void DrawCloneSetup(float width, float height)
+    {
+        ArenaCloneController.PlacementMode mode = cloneController.Mode;
+        bool body = mode == ArenaCloneController.PlacementMode.Body;
+        bool block = mode == ArenaCloneController.PlacementMode.Block;
+        bool selecting = mode == ArenaCloneController.PlacementMode.ChooseBlock;
+        string title = body ? "PLACE BODY CLONE" : block ? "PLACE CLONED BLOCK" : selecting ? "CHOOSE SOURCE BLOCK" : "CHOOSE CLONE TARGET";
+        Header(width, "P" + (ActivePlayerIndex + 1) + "  |  " + title, "All clones expire after this round's final volley.");
+        Fill(new Rect(16f, height - 124f, width - 32f, 112f), new Color(0.02f, 0.03f, 0.045f, 0.97f));
+        ArenaBlock source = selecting ? cloneController.SelectedSource : null;
+        string message = body ? "Mouse / WASD: place  |  Copies your movement and aim  |  Hit once: disappears"
+            : block ? "Mouse / WASD: place  |  Q / E / scroll: rotate  |  Copies the source's remaining durability"
+            : selecting ? "Source " + cloneController.SourceNumber + " / " + cloneController.SourceCount + (source == null ? "" : "  |  " + source.RemainingDurability + " / 3 durability") + "  |  Click a block or use Q / E"
+            : "Choose your body or an owned block. The Clone card is spent only after a valid placement.";
+        GUI.Label(new Rect(26f, height - 116f, width - 52f, 36f), message, textStyle);
+        if (GUI.Button(new Rect(26f, height - 68f, 180f, 46f), "Cancel  [Esc]", buttonStyle))
+            CancelBlockPlacement();
+        if (body || block)
+        {
+            if (block)
+            {
+                if (GUI.Button(new Rect(222f, height - 68f, 110f, 46f), "-15  [Q]", buttonStyle))
+                    blockPlacement.RotatePreview(-15f);
+                if (GUI.Button(new Rect(344f, height - 68f, 110f, 46f), "+15  [E]", buttonStyle))
+                    blockPlacement.RotatePreview(15f);
+            }
+            bool previous = GUI.enabled;
+            GUI.enabled = cloneController.IsPlacementValid;
+            if (GUI.Button(new Rect(width - 280f, height - 68f, 254f, 46f), "Place clone  [Enter]", buttonStyle))
+                ConfirmClonePlacement();
+            GUI.enabled = previous;
+        }
+        else if (selecting)
+        {
+            if (GUI.Button(new Rect(222f, height - 68f, 110f, 46f), "Prev [Q]", buttonStyle))
+                cloneController.CycleSource(-1);
+            if (GUI.Button(new Rect(344f, height - 68f, 110f, 46f), "Next [E]", buttonStyle))
+                cloneController.CycleSource(1);
+            bool previous = GUI.enabled;
+            GUI.enabled = source != null;
+            if (GUI.Button(new Rect(width - 280f, height - 68f, 254f, 46f), "Copy block  [Enter]", buttonStyle))
+                cloneController.BeginBlockCopy();
+            GUI.enabled = previous;
+        }
+        else
+        {
+            if (GUI.Button(new Rect(222f, height - 68f, 230f, 46f), "Clone body  [B]", buttonStyle))
+                cloneController.ChooseBody();
+            bool previous = GUI.enabled;
+            GUI.enabled = cloneController.SourceCount > 0;
+            if (GUI.Button(new Rect(width - 280f, height - 68f, 254f, 46f), "Clone block  [K]", buttonStyle))
+                cloneController.ChooseBlock();
+            GUI.enabled = previous;
+        }
+    }
+
+    private void DrawCloneLabels(float scale)
+    {
+        foreach (ArenaCloneBody clone in cloneController.Bodies)
+        {
+            if (clone == null || !clone.IsAlive)
+                continue;
+            Vector3 target = clone.transform.position;
+            if (!viewCamera.orthographic && Physics.Linecast(viewCamera.transform.position, target, out RaycastHit hit, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore) && hit.collider.GetComponentInParent<ArenaCloneBody>() != clone)
+                continue;
+            Vector3 screen = viewCamera.WorldToScreenPoint(target + Vector3.up * 1.2f);
+            if (screen.z <= 0f)
+                continue;
+            Rect label = new Rect(screen.x / scale - 40f, (Screen.height - screen.y) / scale - 14f, 80f, 28f);
+            Fill(label, new Color(0.015f, 0.02f, 0.03f, 0.95f));
+            GUI.Label(label, "CLONE", textStyle);
         }
     }
 

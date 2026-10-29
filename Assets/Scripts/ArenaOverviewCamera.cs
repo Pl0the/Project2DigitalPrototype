@@ -29,6 +29,10 @@ public sealed class ArenaOverviewCamera : MonoBehaviour
         float halfWidth = Mathf.Max(0f, arenaSize.x) * 0.5f + padding;
         float halfDepth = Mathf.Max(0f, arenaSize.y) * 0.5f + padding;
         float aspect = Mathf.Max(0.01f, overviewCamera.aspect);
-        overviewCamera.orthographicSize = Mathf.Max(halfDepth, halfWidth / aspect);
+        // Keep the entire public board clear of the header, health bars, and setup controls.
+        float uiScale = Mathf.Min(Screen.width / 960f, Screen.height / 640f);
+        float usableHeight = Mathf.Max(0.2f, 1f - 328f * uiScale / Mathf.Max(1f, Screen.height));
+        float usableWidth = Mathf.Max(0.2f, 1f - 32f * uiScale / Mathf.Max(1f, Screen.width));
+        overviewCamera.orthographicSize = Mathf.Max(halfDepth / usableHeight, halfWidth / (aspect * usableWidth));
     }
 }

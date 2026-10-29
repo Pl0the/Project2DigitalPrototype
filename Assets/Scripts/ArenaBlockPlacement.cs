@@ -10,6 +10,8 @@ public sealed class ArenaBlockPlacement : MonoBehaviour
     [SerializeField, Min(0f)] private float clearance = 0.08f;
     private readonly List<ArenaBlock> blocks = new List<ArenaBlock>();
     private int previewOwner;
+    private int previewDurability;
+    private bool previewIsTemporary;
 
     public IReadOnlyList<ArenaBlock> Blocks => blocks;
     public ArenaBlock Preview { get; private set; }
@@ -43,13 +45,17 @@ public sealed class ArenaBlockPlacement : MonoBehaviour
         Preview.ShowPlacementValidity(IsPreviewValid);
     }
 
-    public void BeginPlacement(int owner)
+    public void BeginPlacement(int owner, ArenaBlock source = null)
     {
         CancelPlacement();
         previewOwner = owner;
+        previewDurability = source == null ? 3 : source.RemainingDurability;
+        previewIsTemporary = source != null;
         Preview = Instantiate(blockPrefab, new Vector3(owner == 0 ? -5f : 5f, 1f, 0f), Quaternion.Euler(0f, 90f, 0f));
         Preview.name = "Block placement preview";
-        Preview.Initialize(owner, 3, true);
+        Preview.Initialize(owner, previewDurability, true, previewIsTemporary);
+        if (source != null)
+            Preview.transform.rotation = source.transform.rotation;
         Preview.ShowPlacementValidity(IsPreviewValid);
     }
 
@@ -83,7 +89,7 @@ public sealed class ArenaBlockPlacement : MonoBehaviour
         if (!IsPreviewValid)
             return false;
         Preview.name = "P" + (previewOwner + 1) + " Block";
-        Preview.Initialize(previewOwner, 3);
+        Preview.Initialize(previewOwner, previewDurability, false, previewIsTemporary);
         blocks.Add(Preview);
         Preview = null;
         Physics.SyncTransforms();
@@ -108,7 +114,8 @@ public sealed class ArenaBlockPlacement : MonoBehaviour
         foreach (Collider collider in Physics.OverlapBox(position, half + Vector3.one * clearance, rotation, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
         {
             ArenaBlock block = collider.GetComponentInParent<ArenaBlock>();
-            if ((block != null && !block.IsPreview && !block.IsBroken) || collider.GetComponentInParent<ArenaPlayerMotor>() != null)
+            ArenaCloneBody clone = collider.GetComponentInParent<ArenaCloneBody>();
+            if ((block != null && !block.IsPreview && !block.IsBroken) || (clone != null && clone.IsAlive) || collider.GetComponentInParent<ArenaPlayerMotor>() != null)
                 return false;
         }
         return true;
@@ -136,6 +143,17 @@ public sealed class ArenaBlockPlacement : MonoBehaviour
             if (block != null)
                 Remove(block.gameObject);
         blocks.Clear();
+    }
+
+    public void ExpireTemporaryBlocks()
+    {
+        for (int i = blocks.Count - 1; i >= 0; i--)
+            if (blocks[i] == null || blocks[i].IsTemporary)
+            {
+                if (blocks[i] != null)
+                    Remove(blocks[i].gameObject);
+                blocks.RemoveAt(i);
+            }
     }
 
     private static void Remove(GameObject item)

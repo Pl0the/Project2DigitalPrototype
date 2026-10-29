@@ -10,16 +10,18 @@ public sealed class ArenaBlock : MonoBehaviour
     public int RemainingDurability { get; private set; }
     public int MaximumDurability => maximumDurability;
     public bool IsPreview { get; private set; }
+    public bool IsTemporary { get; private set; }
     public bool IsBroken => RemainingDurability <= 0;
     public Vector3 HalfExtents => Vector3.Scale(GetComponent<BoxCollider>().size, transform.lossyScale) * 0.5f;
 
-    public void Initialize(int owner, int durability, bool preview = false)
+    public void Initialize(int owner, int durability, bool preview = false, bool temporary = false)
     {
         OwnerIndex = owner;
         RemainingDurability = Mathf.Clamp(durability, 1, maximumDurability);
         IsPreview = preview;
+        IsTemporary = temporary;
         GetComponent<BoxCollider>().enabled = !preview;
-        SetColor(owner == 0 ? new Color(0.08f, 0.72f, 0.96f) : new Color(1f, 0.43f, 0.12f));
+        SetColor(owner == 0 ? (temporary ? new Color(0.35f, 0.9f, 1f) : new Color(0.08f, 0.72f, 0.96f)) : (temporary ? new Color(1f, 0.72f, 0.3f) : new Color(1f, 0.43f, 0.12f)));
     }
 
     public void ShowPlacementValidity(bool valid)
