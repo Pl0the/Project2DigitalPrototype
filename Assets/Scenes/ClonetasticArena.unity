@@ -405,6 +405,8 @@ GameObject:
   - component: {fileID: 254266683}
   - component: {fileID: 254266682}
   - component: {fileID: 254266684}
+  - component: {fileID: 254266686}
+  - component: {fileID: 254266685}
   m_Layer: 0
   m_Name: Turn Flow
   m_TagString: Untagged
@@ -428,6 +430,8 @@ MonoBehaviour:
   playerTwo: {fileID: 8500428}
   viewCamera: {fileID: 960930134}
   volleyController: {fileID: 254266684}
+  cardController: {fileID: 254266686}
+  blockPlacement: {fileID: 254266685}
   firstPersonFieldOfView: 75
 --- !u!4 &254266683
 Transform:
@@ -460,6 +464,35 @@ MonoBehaviour:
   duration: 5
   ballSpeed: 12
   ballHeight: 1.2
+--- !u!114 &254266685
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 254266681}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 044cf69b5166d49a493b0559f4a0b809, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::ArenaBlockPlacement
+  blockPrefab: {fileID: 6686297133211220829, guid: 18708e6f5d82b4e8c970296bb7a48d41, type: 3}
+  viewCamera: {fileID: 960930134}
+  clearance: 0.08
+--- !u!114 &254266686
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 254266681}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 22f10368fdef94050b03269fbefbd723, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::ArenaCardController
+  handLimit: 6
+  cardsPerRound: 3
 --- !u!1 &254525644
 GameObject:
   m_ObjectHideFlags: 0

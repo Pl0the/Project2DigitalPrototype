@@ -62,6 +62,10 @@ public sealed class ArenaBall : MonoBehaviour
             ArenaPlayerHealth health = hit.collider.GetComponentInParent<ArenaPlayerHealth>();
             if (health != null)
                 health.TakeDamage();
+
+            ArenaBlock block = hit.collider.GetComponentInParent<ArenaBlock>();
+            if (block != null)
+                block.RegisterHit();
         }
 
         position.y = height;

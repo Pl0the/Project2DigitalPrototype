@@ -11,24 +11,48 @@ public sealed class ArenaVolleyController : MonoBehaviour
     [SerializeField] private float ballHeight = 1.2f;
 
     private readonly List<ArenaBall> balls = new List<ArenaBall>();
+    private ArenaPlayerMotor firstPlayer;
+    private ArenaPlayerMotor secondPlayer;
+    private int firstShots;
+    private int secondShots;
 
     public event Action Completed;
     public bool IsResolving { get; private set; }
     public float TimeRemaining { get; private set; }
     public float Duration => duration;
     public IReadOnlyList<ArenaBall> ActiveBalls => balls;
+    public int VolleyNumber { get; private set; }
+    public int VolleyCount { get; private set; }
 
-    public void BeginVolley(ArenaPlayerMotor playerOne, ArenaPlayerMotor playerTwo)
+    public void BeginVolley(ArenaPlayerMotor playerOne, ArenaPlayerMotor playerTwo, int playerOneShots = 1, int playerTwoShots = 1)
     {
         if (ballPrefab == null)
             throw new InvalidOperationException("Assign the arena ball prefab before firing.");
 
         Cancel();
-        Physics.SyncTransforms();
-        Spawn(playerOne, "P1 Ball", new Color(0.08f, 0.72f, 0.96f));
-        Spawn(playerTwo, "P2 Ball", new Color(1f, 0.43f, 0.12f));
-        TimeRemaining = duration;
+        firstPlayer = playerOne;
+        secondPlayer = playerTwo;
+        firstShots = Mathf.Max(0, playerOneShots);
+        secondShots = Mathf.Max(0, playerTwoShots);
+        VolleyCount = Mathf.Max(firstShots, secondShots);
+        if (VolleyCount == 0)
+        {
+            Completed?.Invoke();
+            return;
+        }
         IsResolving = true;
+        BeginBatch();
+    }
+
+    private void BeginBatch()
+    {
+        VolleyNumber++;
+        Physics.SyncTransforms();
+        if (VolleyNumber <= firstShots)
+            Spawn(firstPlayer, "P1 Ball", new Color(0.08f, 0.72f, 0.96f));
+        if (VolleyNumber <= secondShots)
+            Spawn(secondPlayer, "P2 Ball", new Color(1f, 0.43f, 0.12f));
+        TimeRemaining = duration;
     }
 
     private void FixedUpdate()
@@ -49,10 +73,15 @@ public sealed class ArenaVolleyController : MonoBehaviour
 
         if (TimeRemaining <= 0.00001f)
         {
-            IsResolving = false;
             TimeRemaining = 0f;
             ClearBalls();
-            Completed?.Invoke();
+            if (VolleyNumber >= VolleyCount || firstPlayer.GetComponent<ArenaPlayerHealth>().IsDefeated || secondPlayer.GetComponent<ArenaPlayerHealth>().IsDefeated)
+            {
+                IsResolving = false;
+                Completed?.Invoke();
+            }
+            else
+                BeginBatch();
         }
     }
 
@@ -60,6 +89,8 @@ public sealed class ArenaVolleyController : MonoBehaviour
     {
         IsResolving = false;
         TimeRemaining = 0f;
+        VolleyNumber = 0;
+        VolleyCount = 0;
         ClearBalls();
     }
 

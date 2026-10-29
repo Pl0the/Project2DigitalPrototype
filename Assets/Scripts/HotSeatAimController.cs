@@ -5,13 +5,15 @@ using UnityEngine.InputSystem;
 [DisallowMultipleComponent]
 public sealed class HotSeatAimController : MonoBehaviour
 {
-    public enum Phase { Overview, Handoff, Aiming, Resolving, Locked, MatchOver }
+    public enum Phase { Overview, Handoff, Aiming, Resolving, Locked, MatchOver, Setup, CardHandoff, Hand }
     public enum MatchResult { InProgress, PlayerOneWins, PlayerTwoWins, Draw }
 
     [SerializeField] private ArenaPlayerMotor playerOne;
     [SerializeField] private ArenaPlayerMotor playerTwo;
     [SerializeField] private Camera viewCamera;
     [SerializeField] private ArenaVolleyController volleyController;
+    [SerializeField] private ArenaCardController cardController;
+    [SerializeField] private ArenaBlockPlacement blockPlacement;
     [SerializeField, Range(40f, 100f)] private float firstPersonFieldOfView = 75f;
 
     private Vector3 overviewPosition;
@@ -25,6 +27,7 @@ public sealed class HotSeatAimController : MonoBehaviour
     private int firstPlacementPlayer;
     private int confirmedPlayers;
     private bool paused;
+    private int pendingBlockCard = -1;
     private GUIStyle titleStyle;
     private GUIStyle textStyle;
     private GUIStyle buttonStyle;
@@ -36,13 +39,15 @@ public sealed class HotSeatAimController : MonoBehaviour
     public MatchResult Result { get; private set; }
     public ArenaPlayerHealth PlayerOneHealth { get; private set; }
     public ArenaPlayerHealth PlayerTwoHealth { get; private set; }
+    public ArenaCardController Cards => cardController;
+    public ArenaBlockPlacement Placement => blockPlacement;
     private ArenaPlayerMotor ActivePlayer => ActivePlayerIndex == 0 ? playerOne : playerTwo;
 
     private void Awake()
     {
-        if (playerOne == null || playerTwo == null || viewCamera == null || volleyController == null)
+        if (playerOne == null || playerTwo == null || viewCamera == null || volleyController == null || cardController == null || blockPlacement == null)
         {
-            Debug.LogError("Assign both arena players, the view camera, and the volley controller.", this);
+            Debug.LogError("Assign both players, the camera, and the volley, card, and block controllers.", this);
             enabled = false;
             return;
         }
@@ -64,6 +69,7 @@ public sealed class HotSeatAimController : MonoBehaviour
         playerTwoStart = playerTwo.transform.position;
         playerOneRotation = playerOne.transform.rotation;
         playerTwoRotation = playerTwo.transform.rotation;
+        cardController.ResetMatch();
         ShowOverview(Phase.Overview);
     }
 
@@ -80,13 +86,55 @@ public sealed class HotSeatAimController : MonoBehaviour
             return;
 
         if (CurrentPhase == Phase.Overview && keyboard.enterKey.wasPressedThisFrame)
-            BeginAimingPhase();
+            BeginSetupPhase();
         else if (CurrentPhase == Phase.Locked && keyboard.enterKey.wasPressedThisFrame)
             BeginNextRound();
         else if (CurrentPhase == Phase.MatchOver && keyboard.enterKey.wasPressedThisFrame)
             Restart();
         else if (CurrentPhase == Phase.Handoff && keyboard.spaceKey.wasPressedThisFrame)
             Ready();
+        else if (CurrentPhase == Phase.Setup)
+        {
+            if (keyboard.tabKey.wasPressedThisFrame)
+                EndSetup();
+            else if (keyboard.hKey.wasPressedThisFrame)
+                OpenHand();
+            else if (pendingBlockCard >= 0)
+            {
+                if (keyboard.escapeKey.wasPressedThisFrame)
+                    CancelBlockPlacement();
+                else if (keyboard.enterKey.wasPressedThisFrame || keyboard.spaceKey.wasPressedThisFrame)
+                    ConfirmBlockPlacement();
+                else if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame && blockPlacement.IsBoardPointer(Mouse.current.position.ReadValue()))
+                {
+                    blockPlacement.UpdatePointerPosition(Mouse.current.position.ReadValue());
+                    ConfirmBlockPlacement();
+                }
+            }
+        }
+        else if (CurrentPhase == Phase.CardHandoff)
+        {
+            if (keyboard.spaceKey.wasPressedThisFrame)
+                RevealHand();
+            else if (keyboard.escapeKey.wasPressedThisFrame)
+                ShowSetupView();
+        }
+        else if (CurrentPhase == Phase.Hand)
+        {
+            if (keyboard.escapeKey.wasPressedThisFrame || keyboard.hKey.wasPressedThisFrame)
+                ShowSetupView();
+            else if (keyboard.tabKey.wasPressedThisFrame)
+                EndSetup();
+            else
+            {
+                for (int i = 0; i < 6; i++)
+                    if (keyboard[(Key)((int)Key.Digit1 + i)].wasPressedThisFrame)
+                    {
+                        SelectCard(i);
+                        break;
+                    }
+            }
+        }
         else if (CurrentPhase == Phase.Aiming)
         {
             if (keyboard.escapeKey.wasPressedThisFrame)
@@ -110,12 +158,92 @@ public sealed class HotSeatAimController : MonoBehaviour
 
     public void BeginAimingPhase()
     {
-        if (CurrentPhase != Phase.Overview)
+        if (CurrentPhase != Phase.Setup || !cardController.IsSetupComplete)
             return;
 
         confirmedPlayers = 0;
         // Whoever placed first gets the last opportunity to move and aim.
         ShowHandoff(1 - firstPlacementPlayer);
+    }
+
+    public void BeginSetupPhase()
+    {
+        if (CurrentPhase != Phase.Overview)
+            return;
+        cardController.BeginRound(RoundNumber, firstPlacementPlayer);
+        ShowSetupView();
+    }
+
+    public void OpenHand()
+    {
+        if (CurrentPhase != Phase.Setup)
+            return;
+        CancelBlockPlacement();
+        CurrentPhase = Phase.CardHandoff;
+        viewCamera.cullingMask = 0;
+    }
+
+    public void RevealHand()
+    {
+        if (CurrentPhase == Phase.CardHandoff)
+            CurrentPhase = Phase.Hand;
+    }
+
+    public void SelectCard(int index)
+    {
+        if (CurrentPhase != Phase.Hand || index < 0 || index >= cardController.GetHand(ActivePlayerIndex).Count)
+            return;
+        if (cardController.GetHand(ActivePlayerIndex)[index] == ArenaCardKind.Block)
+        {
+            pendingBlockCard = index;
+            ShowSetupView();
+            blockPlacement.BeginPlacement(ActivePlayerIndex);
+        }
+        else
+        {
+            cardController.PlayCard(index);
+            AfterSetupAction();
+        }
+    }
+
+    public void ConfirmBlockPlacement()
+    {
+        if (CurrentPhase != Phase.Setup || pendingBlockCard < 0 || !blockPlacement.ConfirmPlacement())
+            return;
+        cardController.PlayCard(pendingBlockCard);
+        pendingBlockCard = -1;
+        AfterSetupAction();
+    }
+
+    public void CancelBlockPlacement()
+    {
+        blockPlacement.CancelPlacement();
+        pendingBlockCard = -1;
+    }
+
+    public void EndSetup()
+    {
+        if (CurrentPhase != Phase.Setup && CurrentPhase != Phase.Hand && CurrentPhase != Phase.CardHandoff)
+            return;
+        CancelBlockPlacement();
+        cardController.EndSetup();
+        AfterSetupAction();
+    }
+
+    private void AfterSetupAction()
+    {
+        ShowSetupView();
+        if (!cardController.IsSetupComplete)
+            return;
+        if (cardController.FirstPlayerToPlay >= 0)
+            firstPlacementPlayer = cardController.FirstPlayerToPlay;
+        BeginAimingPhase();
+    }
+
+    private void ShowSetupView()
+    {
+        ShowOverview(Phase.Setup);
+        ActivePlayerIndex = cardController.ActivePlayerIndex;
     }
 
     public void Ready()
@@ -148,7 +276,7 @@ public sealed class HotSeatAimController : MonoBehaviour
         else
         {
             ShowOverview(Phase.Resolving);
-            volleyController.BeginVolley(playerOne, playerTwo);
+            volleyController.BeginVolley(playerOne, playerTwo, cardController.GetAttackCount(0), cardController.GetAttackCount(1));
         }
     }
 
@@ -180,6 +308,9 @@ public sealed class HotSeatAimController : MonoBehaviour
     public void Restart()
     {
         volleyController.Cancel();
+        blockPlacement.ResetBoard();
+        cardController.ResetMatch();
+        pendingBlockCard = -1;
         StopBothPlayers();
         playerOne.ResetPose(playerOneStart, playerOneRotation);
         playerTwo.ResetPose(playerTwoStart, playerTwoRotation);
@@ -250,6 +381,8 @@ public sealed class HotSeatAimController : MonoBehaviour
 
     private void OnDisable()
     {
+        if (blockPlacement != null)
+            blockPlacement.CancelPlacement();
         if (volleyController != null)
         {
             volleyController.Completed -= CompleteVolley;
@@ -274,7 +407,8 @@ public sealed class HotSeatAimController : MonoBehaviour
             return;
 
         EnsureStyles();
-        if (CurrentPhase == Phase.Handoff || (CurrentPhase == Phase.Aiming && paused))
+        bool privateView = CurrentPhase == Phase.Handoff || CurrentPhase == Phase.CardHandoff || CurrentPhase == Phase.Hand || (CurrentPhase == Phase.Aiming && paused);
+        if (privateView)
             Fill(new Rect(0f, 0f, Screen.width, Screen.height), new Color(0.015f, 0.02f, 0.03f, 1f));
 
         Matrix4x4 previousMatrix = GUI.matrix;
@@ -283,7 +417,21 @@ public sealed class HotSeatAimController : MonoBehaviour
         float width = Screen.width / scale;
         float height = Screen.height / scale;
 
-        if (CurrentPhase == Phase.Handoff)
+        if (!privateView)
+            DrawBlockDurability(scale);
+
+        if (CurrentPhase == Phase.CardHandoff)
+        {
+            Rect panel = CenterPanel(width, height);
+            Panel(panel, "PLAYER " + (ActivePlayerIndex + 1), "Private hand.\nOther player: look away before revealing cards.");
+            if (GUI.Button(new Rect(panel.x + 50f, panel.y + 182f, 420f, 48f), "Reveal hand  [Space]", buttonStyle))
+                RevealHand();
+        }
+        else if (CurrentPhase == Phase.Hand)
+            DrawHand(width, height);
+        else if (CurrentPhase == Phase.Setup)
+            DrawSetup(width, height);
+        else if (CurrentPhase == Phase.Handoff)
         {
             Rect panel = CenterPanel(width, height);
             Panel(panel, "PLAYER " + (ActivePlayerIndex + 1), "Your turn to move and aim.\nOther player: look away before continuing.");
@@ -305,7 +453,7 @@ public sealed class HotSeatAimController : MonoBehaviour
         }
         else if (CurrentPhase == Phase.Resolving)
         {
-            Header(width, "ROUND " + RoundNumber + "  |  SHOTS IN FLIGHT", volleyController.TimeRemaining.ToString("0.0") + "s remaining  |  Movement and aim are locked");
+            Header(width, "ROUND " + RoundNumber + "  |  VOLLEY " + volleyController.VolleyNumber + " / " + volleyController.VolleyCount, volleyController.TimeRemaining.ToString("0.0") + "s remaining  |  Movement and aim are locked");
             Fill(new Rect(20f, height - 38f, width - 40f, 12f), new Color(0.12f, 0.15f, 0.2f));
             float fraction = Mathf.Clamp01(volleyController.TimeRemaining / volleyController.Duration);
             Fill(new Rect(20f, height - 38f, (width - 40f) * fraction, 12f), new Color(0.35f, 0.8f, 0.95f));
@@ -324,7 +472,7 @@ public sealed class HotSeatAimController : MonoBehaviour
         {
             bool locked = CurrentPhase == Phase.Locked;
             string title = locked ? "ROUND COMPLETE" : "ROUND " + RoundNumber + "  |  OVERVIEW";
-            string detail = locked ? "Shots cleared. Health carries over to the next round." : "P" + (firstPlacementPlayer + 1) + " places first  |  Aim order: P" + (2 - firstPlacementPlayer) + " then P" + (firstPlacementPlayer + 1);
+            string detail = locked ? (volleyController.VolleyCount == 0 ? "No Attack cards played. No shots fired." : "Shots cleared. Health and surviving blocks carry over.") : "P" + (firstPlacementPlayer + 1) + " starts setup  |  The first player to play a card aims last";
             Header(width, title, detail);
             if (locked)
             {
@@ -335,16 +483,92 @@ public sealed class HotSeatAimController : MonoBehaviour
             {
                 if (GUI.Button(new Rect(20f, height - 66f, 300f, 46f), "First to place: P" + (firstPlacementPlayer + 1), buttonStyle))
                     SetFirstPlacementPlayer(1 - firstPlacementPlayer);
-                if (GUI.Button(new Rect(width - 280f, height - 66f, 260f, 46f), "Start aiming  [Enter]", buttonStyle))
-                    BeginAimingPhase();
+                if (GUI.Button(new Rect(width - 280f, height - 66f, 260f, 46f), "Start setup  [Enter]", buttonStyle))
+                    BeginSetupPhase();
             }
             if (locked && GUI.Button(new Rect(20f, height - 66f, 220f, 46f), "Restart", buttonStyle))
                 Restart();
         }
 
-        if (CurrentPhase != Phase.Handoff && !(CurrentPhase == Phase.Aiming && paused))
+        if (!privateView)
             DrawHealth(width);
         GUI.matrix = previousMatrix;
+    }
+
+    private void DrawSetup(float width, float height)
+    {
+        bool placing = pendingBlockCard >= 0;
+        string title = "ROUND " + RoundNumber + "  |  P" + (ActivePlayerIndex + 1) + (placing ? " PLACE BLOCK" : " PLAY ONE CARD");
+        string detail = "Queued shots: P1 " + cardController.GetAttackCount(0) + "  /  P2 " + cardController.GetAttackCount(1);
+        Header(width, title, detail);
+        Fill(new Rect(16f, height - 124f, width - 32f, 112f), new Color(0.02f, 0.03f, 0.045f, 0.97f));
+        string message = placing ? "Mouse / WASD: place  |  Q / E / scroll: rotate  |  Green: valid  |  Tab: finish setup" : cardController.LastAction;
+        if (string.IsNullOrEmpty(message))
+            message = "Public board. Reveal your hand privately, play one card, then pass the computer.";
+        GUI.Label(new Rect(26f, height - 116f, width - 52f, 36f), message, textStyle);
+        if (placing)
+        {
+            if (GUI.Button(new Rect(26f, height - 68f, 180f, 46f), "Cancel  [Esc]", buttonStyle))
+                CancelBlockPlacement();
+            if (GUI.Button(new Rect(222f, height - 68f, 110f, 46f), "-15  [Q]", buttonStyle))
+                blockPlacement.RotatePreview(-15f);
+            if (GUI.Button(new Rect(344f, height - 68f, 110f, 46f), "+15  [E]", buttonStyle))
+                blockPlacement.RotatePreview(15f);
+            bool previous = GUI.enabled;
+            GUI.enabled = blockPlacement.IsPreviewValid;
+            if (GUI.Button(new Rect(width - 280f, height - 68f, 254f, 46f), "Place  [Enter]", buttonStyle))
+                ConfirmBlockPlacement();
+            GUI.enabled = previous;
+        }
+        else
+        {
+            if (GUI.Button(new Rect(26f, height - 68f, 240f, 46f), "Private hand  [H]", buttonStyle))
+                OpenHand();
+            string status = cardController.HasFinished(1 - ActivePlayerIndex) ? "Opponent finished. Keep playing if you want." : "One card per turn. Keep any cards you do not use.";
+            GUI.Label(new Rect(280f, height - 74f, width - 570f, 60f), status, textStyle);
+            if (GUI.Button(new Rect(width - 280f, height - 68f, 254f, 46f), "Finish setup  [Tab]", buttonStyle))
+                EndSetup();
+        }
+    }
+
+    private void DrawHand(float width, float height)
+    {
+        var hand = cardController.GetHand(ActivePlayerIndex);
+        Header(width, "P" + (ActivePlayerIndex + 1) + "  |  PRIVATE HAND", hand.Count + " / " + cardController.HandLimit + " cards  |  Newest cards discarded this round: " + cardController.GetDiscardedCount(ActivePlayerIndex));
+        GUI.Label(new Rect(24f, 140f, width - 48f, 60f), "Choose one card. Unplayed cards stay in your hand for later rounds.", textStyle);
+        float slotWidth = Mathf.Min(150f, (width - 48f) / 6f);
+        float left = (width - hand.Count * slotWidth) * 0.5f;
+        for (int i = 0; i < hand.Count; i++)
+        {
+            string text = hand[i] == ArenaCardKind.Attack ? "ATTACK\n\n1 shot" : "BLOCK\n\n3 HP wall";
+            if (GUI.Button(new Rect(left + i * slotWidth + 4f, height * 0.5f - 70f, slotWidth - 8f, 180f), text + "\n\n[" + (i + 1) + "]", buttonStyle))
+            {
+                SelectCard(i);
+                break;
+            }
+        }
+        if (GUI.Button(new Rect(24f, height - 70f, 240f, 46f), "Back to board  [Esc]", buttonStyle))
+            ShowSetupView();
+        if (GUI.Button(new Rect(width - 280f, height - 70f, 256f, 46f), "Finish setup  [Tab]", buttonStyle))
+            EndSetup();
+    }
+
+    private void DrawBlockDurability(float scale)
+    {
+        foreach (ArenaBlock block in blockPlacement.Blocks)
+        {
+            if (block == null || block.IsBroken || !block.gameObject.activeInHierarchy)
+                continue;
+            Vector3 target = block.transform.position;
+            if (!viewCamera.orthographic && Physics.Linecast(viewCamera.transform.position, target, out RaycastHit hit, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore) && hit.collider.GetComponentInParent<ArenaBlock>() != block)
+                continue;
+            Vector3 screen = viewCamera.WorldToScreenPoint(target + Vector3.up * 1.15f);
+            if (screen.z <= 0f)
+                continue;
+            Rect label = new Rect(screen.x / scale - 38f, (Screen.height - screen.y) / scale - 14f, 76f, 28f);
+            Fill(label, new Color(0.015f, 0.02f, 0.03f, 0.95f));
+            GUI.Label(label, block.RemainingDurability + " / " + block.MaximumDurability, textStyle);
+        }
     }
 
     private void DrawHealth(float width)
