@@ -169,3 +169,6 @@ Packages/packages-lock.json linguist-generated
 
 # Exceptions for .asset files such as lightning pre-baking
 LightingData.asset     binary
+
+# Serve Web builds as real files; GitHub Pages does not resolve Git LFS pointers.
+docs/** -filter -diff -merge -text

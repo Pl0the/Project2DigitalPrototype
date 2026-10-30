@@ -34,3 +34,15 @@ The project uses Git LFS. After cloning, run `git lfs install` and `git lfs pull
 - Cloned blocks inherit their source's remaining durability, can be placed and rotated freely, and take damage independently. Temporary blocks show a `C` beside their durability. All body and block clones expire at the end of the whole round, including rounds with no shots; normal blocks persist.
 - Health and surviving blocks carry between rounds. Knockouts are resolved after the current firing batch; two defeated players produce a draw. Further queued batches stop after a knockout.
 - A new match clears hands, blocks, clones, and shot queues, restores both players' positions, and resets health.
+
+## Browser build and GitHub Pages
+
+The Web build is in `docs/`. It remains a local, two-player hot-seat game with keyboard and mouse controls.
+
+1. In Unity, activate `Assets/Settings/Build Profiles/Web - Desktop - Release.asset` and include only `Assets/Scenes/ClonetasticArena.unity` in the scene list.
+2. In the profile's Publishing Settings, use Gzip with Decompression Fallback enabled. Build and Run into the repository's `docs/` directory to preview the build over local HTTP.
+3. Keep `docs/.nojekyll` and the `docs/**` Git attributes override. Published files must be stored directly in Git rather than as Git LFS pointers.
+4. Commit the updated `docs/` build. A repository administrator can enable Settings > Pages > Deploy from a branch, selecting `main` and `/docs`.
+5. After GitHub's Pages deployment succeeds, open `https://pl0the.github.io/Project2DigitalPrototype/`.
+
+Rebuild and commit `docs/` whenever the playable version needs to change; pushing Unity source files alone does not update the browser build. For local preview, use Build and Run or an HTTP server instead of opening `index.html` directly from disk.
